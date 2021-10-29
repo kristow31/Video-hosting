@@ -1,26 +1,42 @@
 import os
+import json
+from datetime import timedelta
 from pathlib import Path
 from typing import IO, Generator
 
 import uvicorn as uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi import Depends, status # Assuming you have the FastAPI class for routing
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi_login import LoginManager #Loginmanager Class
+from fastapi_login.exceptions import InvalidCredentialsException #Exception class
+
+if not os.path.isfile('auth.json'):
+    DB = {"username": {"password": "qwertyuiop"}}
+    with open('auth.json', 'w', encoding='utf-8') as fh:
+        fh.write(json.dumps(DB, ensure_ascii=False))
+else:
+    with open('auth.json', 'r', encoding='utf-8') as fh:
+        DB = json.load(fh)
 
 
 files = {
-    item: os.path.join(r'C:\Users\Alex\Downloads\VI', item)
-    for item in os.listdir(r'C:\Users\Alex\Downloads\VI')
+    item: os.path.join(r'samples_directory', item)
+    for item in os.listdir(r'samples_directory')
 }
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+SECRET = "dfglkd4gdf3453sfdk2lfsdlfi983244fsd;lf,sasc"
+
 origins = [
     "http://localhost",
     "http://localhost:5000",
@@ -35,6 +51,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+manager = LoginManager(SECRET, token_url="/login", use_cookie=True)
+manager.cookie_name = "tor-video"
+
+
+class NotAuthenticatedException(Exception):
+    pass
+
+
+def exc_handler(request, exc):
+    return RedirectResponse(url='/login')
+
+
+manager.not_authenticated_exception = NotAuthenticatedException
+app.add_exception_handler(NotAuthenticatedException, exc_handler)
+
+
+@manager.user_loader()
+def load_user(username: str):
+    user = DB.get(username)
+    return user
 
 
 def ranged(
@@ -98,6 +135,28 @@ async def get_video(video_name: str, request: Request, response_class=FileRespon
         return Response(status_code=404)
 
 
+@app.post("/login")
+def login(data: OAuth2PasswordRequestForm = Depends()):
+    username = data.username
+    password = data.password
+    user = load_user(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Нет такого пользователя!")
+    elif password != user['password']:
+        raise HTTPException(status_code=401, detail="Пароль не верный!")
+    access_token = manager.create_access_token(
+        data={"sub": username}, expires=timedelta(hours=24)
+    )
+    resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    manager.set_cookie(resp, access_token)
+    return resp
+
+
+@app.get('/login')
+async def videos_list(request: Request, response_class=HTMLResponse):
+    return templates.TemplateResponse("login.html", {'request': request})
+
+
 @app.get('/play_video/plyr/{video_name}')
 async def play_video(video_name: str, request: Request, response_class=HTMLResponse):
     video_path = files.get(video_name)
@@ -149,8 +208,8 @@ async def play_video(video_name: str, request: Request, response_class=HTMLRespo
 
 
 @app.get('/')
-async def videos_list(request: Request, response_class=HTMLResponse):
-    return templates.TemplateResponse("videos_list.html", {'request': request, 'files': files})
+async def videos_list(request: Request, response_class=HTMLResponse, user=Depends(manager)):
+    return templates.TemplateResponse("index.html", {'request': request, 'files': files})
 
 
 @app.get('/ping')
