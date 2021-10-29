@@ -213,6 +213,10 @@ async def play_video(video_name: str, request: Request, response_class=HTMLRespo
 
 @app.get('/')
 async def videos_list(request: Request, response_class=HTMLResponse, user=Depends(manager)):
+    files = {
+        item: os.path.join(video_dir, item)
+        for item in os.listdir(video_dir)
+    }
     return templates.TemplateResponse("index.html", {'request': request, 'files': files})
 
 
