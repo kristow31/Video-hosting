@@ -19,7 +19,7 @@ from fastapi_login import LoginManager #Loginmanager Class
 from fastapi_login.exceptions import InvalidCredentialsException #Exception class
 
 if not os.path.isfile('auth.json'):
-    DB = {"username": {"password": "qwertyuiop"}}
+    DB = {"username": {"password": "qwertyuiop"}, "DEBUG": 0}
     with open('auth.json', 'w', encoding='utf-8') as fh:
         fh.write(json.dumps(DB, ensure_ascii=False))
 else:
@@ -218,4 +218,11 @@ async def ping_pong():
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    if "DEBUG" in DB:
+        if DB["DEBUG"]:
+            uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+        else:
+            pass
+            #print('DEBUG False')
+    else:
+        print('NOT DEBUG')
