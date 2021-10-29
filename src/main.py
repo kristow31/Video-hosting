@@ -19,17 +19,21 @@ from fastapi_login import LoginManager #Loginmanager Class
 from fastapi_login.exceptions import InvalidCredentialsException #Exception class
 
 if not os.path.isfile('auth.json'):
-    DB = {"username": {"password": "qwertyuiop"}, "DEBUG": 0}
+    DB = {"username": {"password": "qwertyuiop"}, "DEBUG": 0, "video_dir": "samples_directory"}
     with open('auth.json', 'w', encoding='utf-8') as fh:
         fh.write(json.dumps(DB, ensure_ascii=False))
 else:
     with open('auth.json', 'r', encoding='utf-8') as fh:
         DB = json.load(fh)
 
+video_dir = r'samples_directory'
+if "video_dir" in DB:
+    if DB["video_dir"]:
+        video_dir = DB["video_dir"]
 
 files = {
-    item: os.path.join(r'samples_directory', item)
-    for item in os.listdir(r'samples_directory')
+    item: os.path.join(video_dir, item)
+    for item in os.listdir(video_dir)
 }
 
 app = FastAPI()
