@@ -74,7 +74,7 @@ text-align: left;
     {% for file in files %}
     <tr>
         <td><a class="table__link" href="play_video/plyr/{{ file.file }}">{{ file.name }}</a></td>
-        <td><a class="table__link" href="delete/{{ file.file }}">Удалить</a></td>
+        <td><a class="table__link" href="delete/{{ file.hash }}">Удалить</a></td>
     </tr>
     {% endfor %}
 </table>

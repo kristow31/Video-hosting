@@ -1,6 +1,8 @@
 aiofiles==0.7.0
 anyio==3.3.4
 asgiref==3.4.1
+certifi==2021.10.8
+charset-normalizer==2.0.7
 click==8.0.3
 colorama==0.4.4
 fastapi==0.70.0
@@ -15,10 +17,13 @@ passlib==1.7.4
 pip-review==1.1.0
 pydantic==1.8.2
 PyJWT==2.3.0
-pyparsing
+pyparsing==3.0.3
 python-multipart==0.0.5
+python-qbittorrent==0.4.2
+requests==2.26.0
 six==1.16.0
 sniffio==1.2.0
 starlette==0.16.0
 typing-extensions==3.10.0.2
+urllib3==1.26.7
 uvicorn==0.15.0

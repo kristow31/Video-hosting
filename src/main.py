@@ -1,8 +1,10 @@
 import os
 import json
+from time import strftime, gmtime
 from datetime import timedelta, datetime
 from pathlib import Path
 from typing import IO, Generator
+from qbittorrent import Client
 
 import uvicorn as uvicorn
 from fastapi import FastAPI, HTTPException
@@ -18,7 +20,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_login import LoginManager #Loginmanager Class
 
 if not os.path.isfile('auth.json'):
-    DB = {"username": {"password": "qwertyuiop"}, "DEBUG": 0, "video_dir": "samples_directory"}
+    DB = {
+        "username": {"password": "qwertyuiop"},
+        "DEBUG": 0,
+        "video_dir": "samples_directory",
+        "qbittorrent_addr": "http://127.0.0.1:8080/",
+        "qbittorrent_login": "admin",
+        "qbittorrent_password": "adminadmin"
+
+    }
     with open('auth.json', 'w', encoding='utf-8') as fh:
         fh.write(json.dumps(DB, ensure_ascii=False))
 else:
@@ -29,6 +39,11 @@ video_dir = r'samples_directory'
 if "video_dir" in DB:
     if DB["video_dir"]:
         video_dir = DB["video_dir"]
+
+if "qbittorrent_addr" in DB:
+    qb = Client(DB["qbittorrent_addr"])
+    qb.login(DB["qbittorrent_login"], DB["qbittorrent_password"])
+
 
 files = {
     item: os.path.join(video_dir, item)
@@ -215,22 +230,43 @@ def modification_date(filename):
     t = os.path.getmtime(filename)
     return str(datetime.fromtimestamp(t)).split()[0]
 
+@app.get('/delete/{hash}')
+async def delete_file(hash: str, request: Request, response_class=HTMLResponse, user=Depends(manager)):
+    if "qbittorrent_addr" in DB:
+        qb.delete_permanently(hash)
+        response = RedirectResponse('/')
+        return response
+    else:
+        return Response(status_code=404)
+
 
 @app.get('/')
 async def videos_list(request: Request, response_class=HTMLResponse, user=Depends(manager)):
-    files = {
-        item: os.path.join(video_dir, item)
-        for item in os.listdir(video_dir)
-    }
-    files2 = []
-    for file in files:
-        mod = modification_date(files[file])
-        files2.append({
-            "name": f"[{mod}]  {file}",
-            "file": file
-        })
 
-    return templates.TemplateResponse("index.html", {'request': request, 'files': files2})
+    files = []
+    if "qbittorrent_addr" in DB:
+        torrents = qb.torrents(filter='downloaded', sort='added_on', reverse=True)
+        for torrent in torrents:
+            dt = strftime("%d.%m.%Y %H:%M", gmtime(torrent['added_on']))
+            files.append({
+                "name": f"[{dt}]  {torrent['name']}",
+                "file": torrent['name'],
+                "hash": torrent['hash']
+            })
+    else:
+        files0 = {
+            item: os.path.join(video_dir, item)
+            for item in os.listdir(video_dir)
+        }
+        for file in files0:
+            mod = modification_date(files0[file])
+            files.append({
+                "name": f"[{mod}]  {file}",
+                "file": file,
+                "hash": '000'
+            })
+
+    return templates.TemplateResponse("index.html", {'request': request, 'files': files})
 
 
 @app.get('/ping')
@@ -242,8 +278,5 @@ if __name__ == "__main__":
     if "DEBUG" in DB:
         if DB["DEBUG"]:
             uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
-        else:
-            pass
-            #print('DEBUG False')
     else:
         print('NOT DEBUG')
