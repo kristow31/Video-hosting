@@ -230,6 +230,27 @@ def modification_date(filename):
     t = os.path.getmtime(filename)
     return str(datetime.fromtimestamp(t)).split()[0]
 
+
+def humanbytes(B):
+   'Return the given bytes as a human friendly KB, MB, GB, or TB string'
+   B = float(B)
+   KB = float(1024)
+   MB = float(KB ** 2) # 1,048,576
+   GB = float(KB ** 3) # 1,073,741,824
+   TB = float(KB ** 4) # 1,099,511,627,776
+
+   if B < KB:
+      return '{0} {1}'.format(B, 'Bytes' if 0 == B > 1 else 'Byte')
+   elif KB <= B < MB:
+      return '{0:.2f} KB'.format(B/KB)
+   elif MB <= B < GB:
+      return '{0:.2f} MB'.format(B/MB)
+   elif GB <= B < TB:
+      return '{0:.2f} GB'.format(B/GB)
+   elif TB <= B:
+      return '{0:.2f} TB'.format(B/TB)
+
+
 @app.get('/delete/{hash}')
 async def delete_file(hash: str, request: Request, response_class=HTMLResponse, user=Depends(manager)):
     if "qbittorrent_addr" in DB:
@@ -251,7 +272,8 @@ async def videos_list(request: Request, response_class=HTMLResponse, user=Depend
             files.append({
                 "name": f"[{dt}]  {torrent['name']}",
                 "file": torrent['name'],
-                "hash": torrent['hash']
+                "hash": torrent['hash'],
+                "size": humanbytes(torrent['size'])
             })
     else:
         files0 = {
@@ -263,7 +285,8 @@ async def videos_list(request: Request, response_class=HTMLResponse, user=Depend
             files.append({
                 "name": f"[{mod}]  {file}",
                 "file": file,
-                "hash": '000'
+                "hash": '000',
+                "size": '0'
             })
 
     return templates.TemplateResponse("index.html", {'request': request, 'files': files})

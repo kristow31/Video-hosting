@@ -12,7 +12,8 @@
           color: #fff;
       }
       .plyr__video-wrapper{
-          width: 80%;
+          width: 710px;
+          height: 400px;
       }
       .headline{
           text-align: center;
