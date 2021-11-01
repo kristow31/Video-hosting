@@ -217,6 +217,7 @@ async def videos_list(request: Request, response_class=HTMLResponse, user=Depend
         item: os.path.join(video_dir, item)
         for item in os.listdir(video_dir)
     }
+    files = sorted(files, key=os.path.getmtime)
     return templates.TemplateResponse("index.html", {'request': request, 'files': files})
 
 
