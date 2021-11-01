@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pathlib import Path
 from typing import IO, Generator
 
@@ -16,7 +16,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Depends, status # Assuming you have the FastAPI class for routing
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_login import LoginManager #Loginmanager Class
-from fastapi_login.exceptions import InvalidCredentialsException #Exception class
 
 if not os.path.isfile('auth.json'):
     DB = {"username": {"password": "qwertyuiop"}, "DEBUG": 0, "video_dir": "samples_directory"}
@@ -35,6 +34,7 @@ files = {
     item: os.path.join(video_dir, item)
     for item in os.listdir(video_dir)
 }
+
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -211,14 +211,26 @@ async def play_video(video_name: str, request: Request, response_class=HTMLRespo
         return Response(status_code=404)
 
 
+def modification_date(filename):
+    t = os.path.getmtime(filename)
+    return str(datetime.fromtimestamp(t)).split()[0]
+
+
 @app.get('/')
 async def videos_list(request: Request, response_class=HTMLResponse, user=Depends(manager)):
     files = {
         item: os.path.join(video_dir, item)
         for item in os.listdir(video_dir)
     }
-    files = sorted(files, key=os.path.getmtime)
-    return templates.TemplateResponse("index.html", {'request': request, 'files': files})
+    files2 = []
+    for file in files:
+        mod = modification_date(files[file])
+        files2.append({
+            "name": f"[{mod}]  {file}",
+            "file": file
+        })
+
+    return templates.TemplateResponse("index.html", {'request': request, 'files': files2})
 
 
 @app.get('/ping')

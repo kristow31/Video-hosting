@@ -71,10 +71,10 @@ text-align: left;
         <th class="table__headline">Название</th>
         <th class="table__headline" colspan="4">ссылки</th>
     </tr>
-    {% for name, path in files.items() %}
+    {% for file in files %}
     <tr>
-        <td><a class="table__link" href="play_video/plyr/{{ name }}">{{ name }}</a></td>
-        <td><a class="table__link" href="delete/{{ name }}">Удалить</a></td>
+        <td><a class="table__link" href="play_video/plyr/{{ file.file }}">{{ file.name }}</a></td>
+        <td><a class="table__link" href="delete/{{ file.file }}">Удалить</a></td>
     </tr>
     {% endfor %}
 </table>
