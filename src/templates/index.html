@@ -65,7 +65,7 @@ text-align: left;
     </style>
 </head>
 <body>
-    <h1>Список видео</h1>
+    <h1>Список видео <a href="/add-torrent"><img src="static/magnet-link.png" width="30px"/></a></h1>
 <table class="table">
     <tr>
         <th class="table__headline">Название</th>
@@ -73,9 +73,15 @@ text-align: left;
     </tr>
     {% for file in files %}
     <tr>
-        <td><a class="table__link" href="play_video/plyr/{{ file.file }}">{{ file.name }}</a></td>
-        <td>{{ file.size }}</td>
-        <td><a class="table__link" href="delete/{{ file.hash }}">Удалить</a></td>
+        {% if file.status == 'OK' %}
+            <td><a class="table__link" href="play_video/{{ file.hash }}">{{ file.name }}</a></td>
+            <td>{{ file.size }}</td>
+            <td><a class="table__link" href="delete/{{ file.hash }}">Удалить</a></td>
+        {% else %}
+            <td><a class="table__link" href="/"><font color="red">Загрузка {{file.status}}% .... {{ file.name }}</font></a></td>
+            <td>{{ file.size }}</td>
+            <td><a class="table__link" href="delete/{{ file.hash }}">Удалить</a></td>
+        {% endif %}
     </tr>
     {% endfor %}
 </table>

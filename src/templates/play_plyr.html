@@ -6,14 +6,14 @@
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <link rel="stylesheet" href="https://cdn.plyr.io/3.6.8/plyr.css" />
    <link rel="stylesheet" href="/static/style.css">
-   <title>Видео</title>
+   <title>Видео {{video.name}}</title>
 </head>
 <body>
    
 <div class="plyr">
-   <h1 class="plyr__headline">{{video.name}}</h1>
+   <h1 class="plyr__headline"><a class="table__link" href="/">{{video.name}}</a></h1>
    <video class="player__first" id="player" autoplay playsinline controls>
-      <source src="/get_video/{{video.name}}" type="video/mp4" />
+      <source src="/get_video/{{video.hash}}" type="video/mp4" />
       Тег video не поддерживается вашим браузером.
    </video>
 </div>

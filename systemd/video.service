@@ -3,11 +3,11 @@ Description=Video service my
 After=network.target
 
 [Service]
-User=ubuntu
-Group=ubuntu
-WorkingDirectory=/home/ubuntu/code/Video-hosting/src/
-Environment="PATH=/home/ubuntu/code/Video-hosting/env/bin"
-ExecStart=/home/ubuntu/code/Video-hosting/env/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+User=alex
+Group=alex
+WorkingDirectory=/home/alex/code/Video-hosting/src/
+Environment="PATH=/home/alex/code/Video-hosting/env/bin"
+ExecStart=/home/alex/code/Video-hosting/env/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
 
 [Install]
 WantedBy=multi-user.target

@@ -3,11 +3,14 @@ import json
 from time import strftime, gmtime
 from datetime import timedelta, datetime
 from pathlib import Path
-from typing import IO, Generator
-from qbittorrent import Client
+from typing import IO, Generator, List
+from qbittorrentapi import Client, LoginFailed
+from qbittorrentapi import TorrentStates
+
+from loguru import logger
 
 import uvicorn as uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form, File, UploadFile
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.responses import StreamingResponse, FileResponse
@@ -24,7 +27,6 @@ if not os.path.isfile('auth.json'):
         "username": {"password": "qwertyuiop"},
         "DEBUG": 0,
         "video_dir": "samples_directory",
-        "qbittorrent_addr": "http://127.0.0.1:8080/",
         "qbittorrent_login": "admin",
         "qbittorrent_password": "adminadmin"
 
@@ -40,9 +42,21 @@ if "video_dir" in DB:
     if DB["video_dir"]:
         video_dir = DB["video_dir"]
 
-if "qbittorrent_addr" in DB:
-    qb = Client(DB["qbittorrent_addr"])
-    qb.login(DB["qbittorrent_login"], DB["qbittorrent_password"])
+if "qbittorrent_login" in DB:
+
+    qb = Client(
+        host='localhost',
+        port=8080,
+        username=DB["qbittorrent_login"],
+        password=DB["qbittorrent_password"],
+    )
+
+    try:
+        qb.auth_log_in()
+        logger.success("START QB")
+    except LoginFailed as e:
+        #print(e)
+        logger.error("qbittorrentapi >> {}", e)
 
 
 files = {
@@ -61,6 +75,8 @@ origins = [
     "http://localhost:5000",
     "http://localhost:5500",
     "http://127.0.0.1:5500",
+	"http://192.168.0.1:8000",
+	"http://192.168.0.21:8000"
 ]
 
 app.add_middleware(
@@ -139,9 +155,39 @@ def open_file(request, video_path) -> tuple:
     return file, status_code, content_length, content_range
 
 
-@app.get("/get_video/{video_name}")
-async def get_video(video_name: str, request: Request, response_class=FileResponse):
-    video_path = files.get(video_name)
+@app.get("/get_video/{video_hash}")
+async def get_video(video_hash: str, request: Request, response_class=FileResponse):
+
+    torrent = list(qb.torrents_info(torrent_hashes=video_hash))[0]
+    video_path = torrent.content_path
+
+    file, status_code, content_length, content_range = open_file(request, video_path)
+    if video_path:
+        return StreamingResponse(file, status_code=status_code, media_type='video/mp4', headers={
+            'Accept-Ranges': 'bytes',
+            'Content-Length': str(content_length),
+            'Cache-Control': 'no-cache',
+            'Content-Range': content_range
+        })
+    else:
+        return Response(status_code=404)
+
+
+@app.get("/get_video_folder/{video_hash}/{index}")
+async def get_video(video_hash: str, index: int, request: Request, response_class=FileResponse):
+
+    torrent = list(qb.torrents_info(torrent_hashes=video_hash))[0]
+    video_path = torrent.content_path
+
+    files_all = qb.torrents_files(torrent_hash=video_hash, SIMPLE_RESPONSES=True)
+    for f in files_all:
+        if f.get('name')[-3:] == 'mp4':
+            if f.get('index') == index:
+                video_path += '/' + f.get('name').split('/')[-1]
+                break
+
+    logger.info("get_video_folder >> {}",video_path)
+
     file, status_code, content_length, content_range = open_file(request, video_path)
     if video_path:
         return StreamingResponse(file, status_code=status_code, media_type='video/mp4', headers={
@@ -176,52 +222,64 @@ async def videos_list(request: Request, response_class=HTMLResponse):
     return templates.TemplateResponse("login.html", {'request': request})
 
 
-@app.get('/play_video/plyr/{video_name}')
-async def play_video(video_name: str, request: Request, response_class=HTMLResponse):
-    video_path = files.get(video_name)
+@app.post("/add-torrent")
+async def add_torrent(torr: str = Form(...)):
+    logger.info("ADD = {}", torr)
+    if torr.find('http') != -1:
+        logger.success("URL = {}", torr)
+        qb.torrents_add(urls=f"{torr}")
+
+    
+    resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    return resp
+
+
+@app.post("/add-file")
+async def upload(files: List[UploadFile] = File(...)):
+
+    for file in files:
+        contents = await file.read()
+        logger.success("FILE = {}", file.filename)
+        qb.torrents_add(torrent_files=contents)
+
+    logger.success({"Uploaded Filenames": [file.filename for file in files]})
+    resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    return resp
+
+
+@app.get('/add-torrent')
+async def add_torrent(request: Request, response_class=HTMLResponse):
+    return templates.TemplateResponse("add_torrent.html", {'request': request})
+
+
+@app.get('/play_video/{video_hash}')
+async def play_video(video_hash: str, request: Request, response_class=HTMLResponse):
+
+    torrent = list(qb.torrents_info(torrent_hashes=video_hash))[0]
+    video_path = torrent.content_path
+    video_name = torrent.name
+    logger.success('TORRENT >> {}', torrent)
+
+    logger.info("{} = {}", video_name, video_hash)
+
     if video_path:
-        return templates.TemplateResponse(
-            'play_plyr.html', {'request': request, 'video': {'path': video_path, 'name': video_name}})
-    else:
-        return Response(status_code=404)
 
+        if video_path.find('.mp4') != -1:
+            return templates.TemplateResponse('play_plyr.html', {'request': request, 'video': {'hash': video_hash, 'name': video_name}})
+        else:
+            files_all = qb.torrents_files(torrent_hash=video_hash, SIMPLE_RESPONSES=True)
+            files = []
+            for f in files_all:
+                if f.get('name')[-3:] == 'mp4':
 
-@app.get('/play_video/videojs/{video_name}')
-async def play_video(video_name: str, request: Request, response_class=HTMLResponse):
-    video_path = files.get(video_name)
-    if video_path:
-        return templates.TemplateResponse(
-            'play_videojs.html', {'request': request, 'video': {'path': video_path, 'name': video_name}})
-    else:
-        return Response(status_code=404)
+                    files.append({
+                        'video': f.get('name'),
+                        'id': f.get('index'),
+                        'name': f.get('name').split('/')[-1]
+                    })
+            logger.info("FILES >> {}", files)
+            return templates.TemplateResponse('play_plyr_folder.html', {'request': request, 'hash': video_hash, 'files': files})
 
-
-@app.get('/play_video/mediaelement/{video_name}')
-async def play_video(video_name: str, request: Request, response_class=HTMLResponse):
-    video_path = files.get(video_name)
-    if video_path:
-        return templates.TemplateResponse(
-            'play_mediaelement.html', {'request': request, 'video': {'path': video_path, 'name': video_name}})
-    else:
-        return Response(status_code=404)
-
-
-@app.get('/play_video/html5/{video_name}')
-async def play_video(video_name: str, request: Request, response_class=HTMLResponse):
-    video_path = files.get(video_name)
-    if video_path:
-        return templates.TemplateResponse(
-            'play_html5.html', {'request': request, 'video': {'path': video_path, 'name': video_name}})
-    else:
-        return Response(status_code=404)
-
-
-@app.get('/play_video_wasm/{video_name}')
-async def play_video(video_name: str, request: Request, response_class=HTMLResponse):
-    video_path = files.get(video_name)
-    if video_path:
-        return templates.TemplateResponse(
-            'wasm_player.html', {'request': request, 'video': {'path': video_path, 'name': video_name}})
     else:
         return Response(status_code=404)
 
@@ -253,8 +311,8 @@ def humanbytes(B):
 
 @app.get('/delete/{hash}')
 async def delete_file(hash: str, request: Request, response_class=HTMLResponse, user=Depends(manager)):
-    if "qbittorrent_addr" in DB:
-        qb.delete_permanently(hash)
+    if "qbittorrent_login" in DB:
+        qb.torrents_delete(delete_files=True, torrent_hashes=hash)
         response = RedirectResponse('/')
         return response
     else:
@@ -264,17 +322,28 @@ async def delete_file(hash: str, request: Request, response_class=HTMLResponse, 
 @app.get('/')
 async def videos_list(request: Request, response_class=HTMLResponse, user=Depends(manager)):
 
+    global files
     files = []
-    if "qbittorrent_addr" in DB:
-        torrents = qb.torrents(filter='downloaded', sort='added_on', reverse=True)
-        for torrent in torrents:
-            dt = strftime("%d.%m.%Y %H:%M", gmtime(torrent['added_on']))
+    if "qbittorrent_login" in DB:
+
+        for torrent in qb.torrents_info():
+
+            if torrent.state_enum.is_downloading:
+                status = int((torrent.downloaded / torrent.total_size) *100)
+            else:
+                status = "OK"
+
+            dt = strftime("%d.%m.%Y %H:%M", gmtime(torrent.added_on))
             files.append({
-                "name": f"[{dt}]  {torrent['name']}",
-                "file": torrent['name'],
-                "hash": torrent['hash'],
-                "size": humanbytes(torrent['size'])
+                "name": f"[{dt}]  {torrent.name}",
+                "file": torrent.content_path,
+                "hash": torrent.hash,
+                "size": humanbytes(torrent.size),
+                "status": status,
+                "dt": strftime("%Y%m%d%H:%M", gmtime(torrent.added_on))
             })
+        files.sort(key=lambda dictionary: dictionary['dt'], reverse=True)
+        
     else:
         files0 = {
             item: os.path.join(video_dir, item)
@@ -286,7 +355,8 @@ async def videos_list(request: Request, response_class=HTMLResponse, user=Depend
                 "name": f"[{mod}]  {file}",
                 "file": file,
                 "hash": '000',
-                "size": '0'
+                "size": '0',
+                "status": "OK"
             })
 
     return templates.TemplateResponse("index.html", {'request': request, 'files': files})
@@ -294,6 +364,31 @@ async def videos_list(request: Request, response_class=HTMLResponse, user=Depend
 
 @app.get('/ping')
 async def ping_pong():
+
+    files = []
+
+    for torrent in qb.torrents_info():
+
+        if torrent.state_enum.is_downloading:
+            continue
+        
+        content_path = torrent.content_path
+        #logger.info("content_path = {}", content_path)
+
+        if content_path.find('.mp4') != -1:
+            pass
+        else:
+            logger.debug('folder {}', content_path)
+            videos = os.listdir(content_path)
+            #logger.debug('videos {}', videos)
+            #Фильтруем список
+            videos = list(filter(lambda x: x.endswith('.mp4'), videos))
+            logger.debug('FILTER {}', videos)
+            
+
+    files2 = qb.torrents_files(torrent_hash='da3a6afe9790080a9d3c6775e51965b2e0ed07c9', SIMPLE_RESPONSES=True)
+    logger.success(files2)
+
     return {'message': 'pong'}
 
 
