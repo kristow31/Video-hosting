@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+   <meta charset="UTF-8">
+   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <link rel="stylesheet" href="https://cdn.plyr.io/3.6.8/plyr.css" />
+   <link rel="stylesheet" href="/static/style.css">
+   <title>Новый торрент</title>
+   <style>
+      input[type="text"] {
+         width: 200px;
+         height: 20px;
+         padding-right: 50px;
+      }
+
+      input[type="submit"] {
+         margin-left: -50px;
+         height: 30px;
+         width: 77px;
+         background: blue;
+         color: white;
+         border: 0;
+         -webkit-appearance: none;
+      }
+   </style>
+</head>
+<body>
+   
+<div class="plyr">
+   <form method="post" action="/add-torrent">
+      <input type="text" name="torr"><input type="submit">
+   </form>
+</div>
+<div class="plyr"></div>
+   <form enctype="multipart/form-data" method="post" action="/add-file">
+      <p><input type="file" name="files" multiple accept=".torrent">
+      <input type="submit" value="Отправить"></p>
+   </form> 
+</div>
+
+</body>
+</html>

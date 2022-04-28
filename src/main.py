@@ -7,6 +7,11 @@ from typing import IO, Generator, List
 from qbittorrentapi import Client, LoginFailed
 from qbittorrentapi import TorrentStates
 
+import requests
+from bs4 import BeautifulSoup
+import asyncio
+import aiohttp
+
 from loguru import logger
 
 import uvicorn as uvicorn
@@ -21,6 +26,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Depends, status # Assuming you have the FastAPI class for routing
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_login import LoginManager #Loginmanager Class
+
+
 
 if not os.path.isfile('auth.json'):
     DB = {
@@ -234,6 +241,33 @@ async def add_torrent(torr: str = Form(...)):
     return resp
 
 
+def save_img(url, name):
+
+    proxies = {
+        "http": "http://alfard2022:russ2022alfard@vpn.pazoom.info:3128",
+        "https": "http://alfard2022:russ2022alfard@vpn.pazoom.info:3128"
+    }
+
+    html = requests.get(url, proxies=proxies)
+    logger.info("STATUS > {}", html.status_code)
+    soup = BeautifulSoup(html.text, "lxml")
+    var_all = soup.find_all('var', class_='postImg')
+    for one in var_all:
+        url_img = one['title']
+        logger.debug("URL > {}", url_img)
+
+        if url_img.find("fastpic.org/big/") != -1:
+            try:
+                response = requests.get(url_img, proxies=proxies)
+                if response.status_code == 200:
+                    with open(name, 'wb') as f:
+                        f.write(response.content)
+                        logger.success("Успешно сохранен файл = {}", name)
+            except:
+                logger.error("Ошибка записи >> {}", url_img)
+            return 1
+
+
 @app.post("/add-file")
 async def upload(files: List[UploadFile] = File(...)):
 
@@ -241,6 +275,20 @@ async def upload(files: List[UploadFile] = File(...)):
         contents = await file.read()
         logger.success("FILE = {}", file.filename)
         qb.torrents_add(torrent_files=contents)
+
+    for _ in range(2):
+        for torrent in qb.torrents_info():
+
+            if torrent.state_enum.is_downloading:
+                properties = torrent.properties
+                print(">>>>>>>>", properties.comment)
+                if properties.comment:
+                    img_url = f'static/img_save/{torrent.hash}.jpg'
+                    if not os.path.isfile(img_url):
+                        try:
+                            save_img(url=properties.comment, name=img_url)
+                        except:
+                            logger.error("Что-то не так >> {}", properties.comment)
 
     logger.success({"Uploaded Filenames": [file.filename for file in files]})
     resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
@@ -266,6 +314,38 @@ async def play_video(video_hash: str, request: Request, response_class=HTMLRespo
 
         if video_path.find('.mp4') != -1:
             return templates.TemplateResponse('play_plyr.html', {'request': request, 'video': {'hash': video_hash, 'name': video_name}})
+        else:
+            files_all = qb.torrents_files(torrent_hash=video_hash, SIMPLE_RESPONSES=True)
+            files = []
+            for f in files_all:
+                if f.get('name')[-3:] == 'mp4':
+
+                    files.append({
+                        'video': f.get('name'),
+                        'id': f.get('index'),
+                        'name': f.get('name').split('/')[-1]
+                    })
+            logger.info("FILES >> {}", files)
+            return templates.TemplateResponse('play_plyr_folder.html', {'request': request, 'hash': video_hash, 'files': files})
+
+    else:
+        return Response(status_code=404)
+
+
+@app.get('/video/{video_hash}')
+async def video(video_hash: str, request: Request, response_class=HTMLResponse):
+
+    torrent = list(qb.torrents_info(torrent_hashes=video_hash))[0]
+    video_path = torrent.content_path
+    video_name = torrent.name
+    logger.success('TORRENT >> {}', torrent)
+
+    logger.info("{} = {}", video_name, video_hash)
+
+    if video_path:
+
+        if video_path.find('.mp4') != -1:
+            return templates.TemplateResponse('video.html', {'request': request, 'video': {'hash': video_hash, 'name': video_name}})
         else:
             files_all = qb.torrents_files(torrent_hash=video_hash, SIMPLE_RESPONSES=True)
             files = []
@@ -334,13 +414,41 @@ async def videos_list(request: Request, response_class=HTMLResponse, user=Depend
                 status = "OK"
 
             dt = strftime("%d.%m.%Y %H:%M", gmtime(torrent.added_on))
+            properties = torrent.properties
+            #print(">>>>>>>>", properties.comment)
+
+            img_url = "/static/img/default.jpg"
+            ##############################
+            proxies = "http://alfard2022:russ2022alfard@vpn.pazoom.info:3128"
+            if not os.path.isfile(f'static/img_save/{torrent.hash}.jpg'):
+                if torrent.properties.comment:
+                    '''
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(url=torrent.properties.comment, proxy=proxies) as response:
+                            response_text = await response.text()
+                            soup = BeautifulSoup(response_text, "lxml")
+                            div = soup.find('div', class_='post-align')
+                            url_img = div.find('var')['title']
+                            print("+++++", url_img)
+
+                            async with session.get(url=url_img, proxy=proxies) as response:
+                                response_text = await response.content
+                                with open(f'static/img_save/{torrent.hash}.jpg', 'wb') as f:
+                                    f.write(response_text)
+                    '''
+            else:
+                img_url = f'static/img_save/{torrent.hash}.jpg'
+            ##############################
+
             files.append({
-                "name": f"[{dt}]  {torrent.name}",
+                "name": torrent.name[:100],
                 "file": torrent.content_path,
                 "hash": torrent.hash,
                 "size": humanbytes(torrent.size),
                 "status": status,
-                "dt": strftime("%Y%m%d%H:%M", gmtime(torrent.added_on))
+                "date": dt,
+                "dt": strftime("%Y%m%d%H:%M", gmtime(torrent.added_on)),
+                "img": img_url
             })
         files.sort(key=lambda dictionary: dictionary['dt'], reverse=True)
         

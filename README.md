@@ -48,6 +48,7 @@ sudo service nginx restart
 project_path=`pwd`
 sudo ln -s $project_path/systemd/video.service /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl stop video.service
 sudo systemctl start video.service
 sudo systemctl enable video.service
 sudo systemctl status video.service

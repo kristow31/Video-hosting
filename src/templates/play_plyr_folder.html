@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+   <meta charset="UTF-8">
+   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <link rel="stylesheet" href="https://cdn.plyr.io/3.6.8/plyr.css" />
+   <link rel="stylesheet" href="/static/style.css">
+   <title>Видео из папки</title>
+   <style>
+  
+      .accordion-item {
+        margin-bottom: .25rem;
+      }
+  
+      .accordion-item:last-child {
+        margin-bottom: 0;
+      }
+  
+      .accordion-item-header {
+        padding: 10px 15px;
+        background: #ed5565;
+        color: #fff;
+        cursor: pointer;
+      }
+  
+      .accordion-item-content {
+        background: #383838;
+        color: #fff;
+        display: none;
+      }
+  
+      .accordion-item.show .accordion-item-content {
+        padding: 10px 15px;
+        display: block;
+      }
+  
+      .accordion-item.show .accordion-item-header {
+        background: #da4453;
+        color: #fff;
+      }
+    </style>
+</head>
+<body>
+
+   <div id="accordion" class="accordion" style="max-width: 800px; margin: 0 auto;">
+
+      {% for video in files %}
+
+         <div class="accordion-item">
+            <div class="accordion-item-header">({{video.id}}) {{video.name}}</div>
+            <div class="accordion-item-content plyr" style="height: 400px;">
+               <video class="player__first" id="player" playsinline controls>
+                  <source src="/get_video_folder/{{hash}}/{{video.id}}" type="video/mp4" />
+                  Тег video не поддерживается вашим браузером.
+               </video>
+            </div>
+         </div>
+
+      {% endfor %}
+  
+    </div>
+  
+    <script>
+      var accordion = (function (element) {
+  
+        var _getItem = function (elements, className) { // функция для получения элемента с указанным классом
+          var element = undefined;
+          elements.forEach(function (item) {
+            if (item.classList.contains(className)) {
+              element = item;
+            }
+          });
+          return element;
+        };
+  
+        return function () {
+          var _mainElement = {}, // .accordion
+            _items = {}, // .accordion-item
+            _contents = {}; // .accordion-item-content 
+  
+  
+          var _actionClick = function (e) {
+            if (!e.target.classList.contains('accordion-item-header')) { // прекращаем выполнение функции если кликнули не по заголовку
+              return;
+            }
+            e.preventDefault();   // Отменям стандартное действие
+            // получаем необходимые данные
+            var header = e.target,
+              item = header.parentElement,
+              itemActive = _getItem(_items, 'show');
+  
+            if (itemActive === undefined) { // добавляем класс show к элементу (в зависимости от выбранного заголовка)
+              item.classList.add('show');
+            } else {
+              // удаляем класс show у ткущего элемента
+              itemActive.classList.remove('show');
+              // если следующая вкладка не равна активной
+              if (itemActive !== item) {
+                // добавляем класс show к элементу (в зависимости от выбранного заголовка)
+                item.classList.add('show');
+              }
+            }
+          },
+            _setupListeners = function () {
+              // добавим к элементу аккордиона обработчик события click
+              _mainElement.addEventListener('click', _actionClick);
+            };
+  
+          return {
+            init: function (element) {
+              _mainElement = (typeof element === 'string' ? document.querySelector(element) : element);
+              _items = _mainElement.querySelectorAll('.accordion-item');
+              _setupListeners();
+            }
+          }
+  
+        }
+      })();
+  
+      var accordion1 = accordion();
+      accordion1.init('#accordion');
+    </script>
+
+<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+<script src="https://cdn.plyr.io/3.6.8/plyr.js"></script>
+<script>
+   const player = new Plyr('#player');
+</script>
+</body>
+</html>
